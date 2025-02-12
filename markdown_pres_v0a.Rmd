@@ -1,0 +1,1674 @@
+---
+title: "Cardiff and Vale Early Years Population Health Assessment"
+author: "Dr Jonny Currie, GP and Public Health Consultant"
+output: 
+  powerpoint_presentation:
+    reference_doc: template.pptx
+---
+
+```{r setup, include = FALSE, echo = FALSE, warning = FALSE, message = FALSE}
+knitr::opts_chunk$set(echo = FALSE, fig.width=30,fig.height=12)
+
+pks <- c("readxl", "janitor", "patchwork", "fuzzyjoin", "viridis", "scales", "ggtext", "showtext", 
+         "sysfonts", "stringr")
+
+lapply(pks, require, character.only = T)
+
+font_add_google("Poppins", family = "Poppins")
+
+windowsFonts(Poppins=windowsFont("Poppins"))
+
+library(tidyverse)
+
+ggplot + 
+  theme_set(theme_bw() + theme(axis.title = element_text(size = 60, 
+                                                              family = "Poppins"), 
+                                  axis.text = element_text(size = 60, 
+                                                              family = "Poppins"),
+                                  plot.caption = element_text(size = 40, 
+                                                         family = "Poppins"),
+                                  plot.title = element_text(size = 80, 
+                                                              family = "Poppins"),
+                                  plot.subtitle = element_text(size = 80, 
+                                                              family = "Poppins"),
+                                  legend.title = element_text(size = 60, 
+                                                              family = "Poppins"),
+                                  legend.text = element_text(size = 60, 
+                                                              family = "Poppins"),
+                                  legend.key.width = unit(3.5, "cm"),
+                                  plot.title.position = "plot"))
+
+
+```
+
+## Introduction
+
+- This datapack has been produced by the Cardiff & Vale Local Public Health team to accompany the 2024 Director of Public Health report on Early Years (children 0-5 years)
+
+- Information on data and methods used is available in a report online or on request
+
+- For questions about the report and data please contact [x]
+
+## 1 in 3 (Cardiff) and 1 in 5 (Vale) children live in poverty in Cardiff and the Vale of Glamorgan
+
+::: notes
+```{r child_pov_notes, echo = FALSE, warning = FALSE, message = FALSE}
+
+child_pov <- read_xlsx("child_poverty_ahc_local.xls",
+                       sheet = 1,
+                       skip = 1) %>%
+  #select most recent data
+  select(1,2,3,12,21) %>%
+  rename(region=1, la=2, area_code=3, 
+         num_2223=4, perc_2223=5)
+
+#Generate 95% CIs
+
+child_pov <- child_pov %>%
+  mutate(se = sqrt(perc_2223*(1-perc_2223)/num_2223)) %>%
+  mutate(lci = perc_2223-(1.96*se), 
+         uci = perc_2223+(1.96*se)) %>%
+  mutate(la = case_when(
+    la == "Vale of Glamorgan / Bro Morgannwg" ~ "Vale of Glamorgan",
+    la == "Cardiff / Caerdydd" ~ "Cardiff",
+    TRUE ~ as.character(la)
+  ))
+
+paste0(round(child_pov %>% filter(str_detect(la, "Cardiff")) %>% select(perc_2223)*100, 2), "% of children in Cardiff were living in relative poverty in 2022-23 after housing costs (95% CI ", round(child_pov %>% filter(str_detect(la, "Cardiff")) %>% select(lci)*100, 2), "-", round(child_pov %>% filter(str_detect(la, "Cardiff")) %>% select(uci)*100, 2), "%, and ", round(child_pov %>% filter(str_detect(la, "Vale of Glamorgan")) %>% select(perc_2223)*100, 2), "% of children in Vale of Glamorgan (95% CI ", round(child_pov %>% filter(str_detect(la, "Vale of Glamorgan")) %>% select(lci)*100, 2), "-", round(child_pov %>% filter(str_detect(la, "Vale of Glamorgan")) %>% select(uci)*100, 2), "%.")
+
+
+```
+:::
+
+```{r child_poverty, echo = FALSE, warning = FALSE, message = FALSE}
+knitr::opts_chunk$set(echo = FALSE, fig.width=30,fig.height=10)
+
+child_pov <- read_xlsx("child_poverty_ahc_local.xls",
+                       sheet = 1,
+                       skip = 1) %>%
+  #select most recent data
+  select(1,2,3,12,21) %>%
+  rename(region=1, la=2, area_code=3, 
+         num_2223=4, perc_2223=5)
+
+#Generate 95% CIs
+
+child_pov <- child_pov %>%
+  mutate(se = sqrt(perc_2223*(1-perc_2223)/num_2223)) %>%
+  mutate(lci = perc_2223-(1.96*se), 
+         uci = perc_2223+(1.96*se)) %>%
+  mutate(la = case_when(
+    la == "Vale of Glamorgan / Bro Morgannwg" ~ "Vale of Glamorgan",
+    la == "Cardiff / Caerdydd" ~ "Cardiff",
+    TRUE ~ as.character(la)
+  ))
+
+b <- child_pov %>%
+  filter(str_detect(la, "Cardiff|Vale of Glamorgan")) %>%
+  mutate(la = as.factor(la)) %>%
+  mutate(la = fct_relevel(la, c("Cardiff", "Vale of Glamorgan"))) %>%
+  mutate(rel_pov_rate = perc_2223) %>%
+  ggplot(aes(x=reorder(la, rel_pov_rate), y=rel_pov_rate, fill=la, group=la)) + 
+  geom_bar(stat = "identity", width=0.2) +
+  geom_errorbar(aes(ymin=lci, ymax=uci), width=0.1) + 
+  coord_flip() +
+  ylim(0,0.5) + 
+  #guides(fill = F) + 
+  scale_fill_manual(name = NULL, values=c("#eb008b","#3a90ce")) +  
+  scale_y_continuous(labels = scales::percent) +
+  labs(y="\n% children living in relative poverty", x=NULL,
+       title = "After housing costs") + 
+  theme(axis.text.y = element_blank())
+
+#now do standard indicator with DWP data
+dwp_rel_pov <- read_xlsx("dwp_rel_pov.xlsx",
+                         skip = 9) %>%
+  select(2, 7) %>%
+  rename(la=1, no_rel_pov_2223=2)
+
+#load 0-16 popn data
+
+popn_2223 <- read.csv("popn_0_16.csv")
+
+a <- fuzzy_left_join(dwp_rel_pov, popn_2223,
+                     by = "la", 
+                     match_fun = str_detect) %>% drop_na() %>%
+  select(-1) %>%
+  select(2, 1, 3) %>%
+  rename(la=1) %>%
+  mutate(la = str_trim(la)) %>%
+  mutate(no_rel_pov_2223 = as.numeric(no_rel_pov_2223)) %>%
+  mutate(rel_pov_rate = no_rel_pov_2223/popn_2223) %>%
+  mutate(se = sqrt(rel_pov_rate*(1-rel_pov_rate)/no_rel_pov_2223),
+         lci = rel_pov_rate-(1.96*se),
+         uci = rel_pov_rate+(1.96*se)) %>%
+  filter(la %in% c("Cardiff", "Vale of Glamorgan")) %>%
+  mutate(la = as.factor(la)) %>%
+  mutate(la = fct_relevel(la, c("Cardiff", "Vale of Glamorgan"))) %>%
+  ggplot(aes(x=reorder(la, rel_pov_rate), y=rel_pov_rate, fill=la, group=la)) + 
+  geom_bar(stat = "identity", width=0.2) +
+  geom_errorbar(aes(ymin=lci, ymax=uci), width=0.1) + 
+  coord_flip() +
+  ylim(0,0.5) + 
+  guides(fill = F) + 
+  scale_fill_manual(name="Key",
+                    values=c("#eb008b", "#3a90ce")) + 
+  scale_y_continuous(labels = scales::percent) +
+  labs(y="\n% children living in relative poverty", x=NULL,
+       title = "Before housing costs") + 
+  theme(axis.text.y = element_blank())
+
+(a + plot_spacer() + b) + plot_layout(guides = "collect",
+                      axis_titles = "collect") +
+  plot_annotation(caption = " DWP and End Child Poverty, 2024.")
+
+```
+
+## Low birth weight babies in CAV remain below national levels, but the gap is narrowing
+
+::: notes
+
+```{r lbw_notes, echo = FALSE, warning = FALSE, message = FALSE}
+knitr::opts_chunk$set(echo = FALSE, fig.width=30,fig.height=10)
+
+#Chart on low birth weight
+
+#data
+
+bw_2017 <- read_xls("birthcharacteristicsworkbook2017.xls",
+                    sheet = 6,
+                    skip = 7) %>%
+  select(1,2,3, 15) %>%
+  rename(area_code=1, area=2, total=3, per_lbw=4) %>%
+  drop_na() %>%
+  filter(str_detect(area, "Cardiff") | str_detect(area, "Vale of Glamorgan") | str_detect(area, "WALES")) %>%
+  add_column(year=2017)
+
+bw_2018 <- read_xls("birthcharacteristics2018workbook.xls",
+                    sheet=4, 
+                    skip = 7) %>%
+  select(1,2,4,16) %>%
+  rename(area_code=1, area=2, total=3, per_lbw=4) %>%
+  drop_na() %>%
+  filter(str_detect(area, "Cardiff") | str_detect(area, "Vale of Glamorgan") | str_detect(area, "WALES")) %>%
+  add_column(year=2018)
+
+bw_2019 <- read_xlsx("birthcharacteristics2019correction1.xlsx",
+                    sheet=5, 
+                    skip=7) %>%
+  select(1,2,4,16) %>%
+  rename(area_code=1, area=2, total=3, per_lbw=4) %>%
+  drop_na() %>%
+  filter(str_detect(area, "Cardiff") | str_detect(area, "Vale of Glamorgan") | str_detect(area, "WALES")) %>%
+  add_column(year=2019) %>%
+  mutate(total = as.numeric(total))
+
+bw_2020 <- read_xlsx("birthcharacteristics2020correction.xlsx",
+                     sheet=5, 
+                     skip=4) %>%
+  select(1,2,4,16) %>%
+  rename(area_code=1, area=2, total=3, per_lbw=4) %>%
+  drop_na() %>%
+  filter(str_detect(area, "Cardiff") | str_detect(area, "Vale of Glamorgan") | str_detect(area, "WALES")) %>%
+  add_column(year=2020)
+
+bw_2021 <- read_xlsx("correctionsbirthcharacteristics2021workbook6.xlsx",
+                     sheet=5,
+                     skip=7) %>%
+  select(1,2,4,16) %>%
+  rename(area_code=1, area=2, total=3, per_lbw=4) %>%
+  drop_na() %>%
+  filter(str_detect(area, "Cardiff") | str_detect(area, "Vale of Glamorgan") | str_detect(area, "WALES")) %>%
+  add_column(year=2021)
+
+bw_2022 <- read_xlsx("birthcharacteristics2022.xlsx",
+                     sheet=4,
+                     skip=7) %>%
+  select(1,2,4,16) %>%
+  rename(area_code=1, area=2, total=3, per_lbw=4) %>%
+  drop_na() %>%
+  filter(str_detect(area, "Cardiff") | str_detect(area, "Vale of Glamorgan") | str_detect(area, "WALES")) %>%
+  add_column(year=2022)
+
+bw_all <- bind_rows(bw_2017, bw_2018, bw_2019, bw_2020, bw_2021, bw_2021, bw_2022)
+
+#remove england/wales data
+
+bw_all <- bw_all[!grepl("ENGLAND", bw_all$area),] %>%
+  mutate(per_lbw = as.numeric(per_lbw))
+
+#merge Cardiff and Vale data as very similar
+
+#strip out total denominator data by area
+
+denom <- bw_all %>%
+  mutate(area = case_when(
+    area == "Vale of Glamorgan" ~ "Cardiff & Vale",
+    area == "Cardiff" ~ "Cardiff & Vale",
+    area == "WALES" ~ "Wales",
+    TRUE ~ as.character(area)
+  )) %>%
+  select(1,2,3,5) %>%
+  group_by(area, year) %>%
+  summarise(total = sum(total)) %>%
+  ungroup()
+
+#calculate median lwb for CAV
+
+medians <- bw_all %>%
+  mutate(area = case_when(
+    area == "Vale of Glamorgan" ~ "Cardiff & Vale",
+    area == "Cardiff" ~ "Cardiff & Vale",
+    area == "WALES" ~ "Wales",
+    TRUE ~ as.character(area)
+  )) %>%
+  select(1,2,4,5) %>%
+  group_by(area, year) %>%
+  summarise(per_lbw = median(per_lbw)) %>%
+  ungroup()
+
+bw_all <- left_join(denom, medians, by = c("area", "year"))
+
+#calculate 95% CIs
+
+bw_all <- bw_all %>%
+  mutate(se = sqrt(per_lbw*(100-per_lbw)/total),
+         lci=per_lbw-(1.96*se),
+         uci=per_lbw+(1.96*se))
+
+bw_all_perc <- bw_all %>%
+  mutate(area = as.factor(area)) %>%
+  mutate(area = fct_relevel(area, c("Wales", "Cardiff & Vale"))) %>%
+  ggplot(aes(x=year, y=per_lbw, colour=area, group=area)) + 
+  geom_line(size=2) + 
+  geom_errorbar(aes(ymin=lci, ymax=uci), 
+                colour="black", width=0.1) + 
+  scale_colour_manual(values = c("#49b869", "#194e82")) + 
+  labs(x=NULL, y="%") +
+  guides(colour = guide_legend(title = NULL)) + 
+  scale_y_continuous(labels = scales::percent_format(scale = 1))
+
+bw_all_abs <- bw_all %>%
+  mutate(area = as.factor(area)) %>%
+  mutate(area = fct_relevel(area, c("Wales", "Cardiff & Vale"))) %>%
+  mutate(bw_abs = total*(per_lbw/100))
+
+paste0(bw_all_abs %>% filter(area == "Cardiff & Vale" & year == 2022) %>% select(per_lbw), "% (total ", round(bw_all_abs %>% filter(area == "Cardiff & Vale" & year == 2022) %>% select(bw_abs), 0), ") of babies in Cardiff and Vale were born with low birth weight (less than 2500g) in 2022.")
+
+```
+:::
+
+```{r lbw, echo = FALSE, warning = FALSE, message = FALSE}
+knitr::opts_chunk$set(echo = FALSE, fig.width=30,fig.height=10)
+
+#Chart on low birth weight
+
+#data
+
+bw_2017 <- read_xls("birthcharacteristicsworkbook2017.xls",
+                    sheet = 6,
+                    skip = 7) %>%
+  select(1,2,3, 15) %>%
+  rename(area_code=1, area=2, total=3, per_lbw=4) %>%
+  drop_na() %>%
+  filter(str_detect(area, "Cardiff") | str_detect(area, "Vale of Glamorgan") | str_detect(area, "WALES")) %>%
+  add_column(year=2017)
+
+bw_2018 <- read_xls("birthcharacteristics2018workbook.xls",
+                    sheet=4, 
+                    skip = 7) %>%
+  select(1,2,4,16) %>%
+  rename(area_code=1, area=2, total=3, per_lbw=4) %>%
+  drop_na() %>%
+  filter(str_detect(area, "Cardiff") | str_detect(area, "Vale of Glamorgan") | str_detect(area, "WALES")) %>%
+  add_column(year=2018)
+
+bw_2019 <- read_xlsx("birthcharacteristics2019correction1.xlsx",
+                    sheet=5, 
+                    skip=7) %>%
+  select(1,2,4,16) %>%
+  rename(area_code=1, area=2, total=3, per_lbw=4) %>%
+  drop_na() %>%
+  filter(str_detect(area, "Cardiff") | str_detect(area, "Vale of Glamorgan") | str_detect(area, "WALES")) %>%
+  add_column(year=2019) %>%
+  mutate(total = as.numeric(total))
+
+bw_2020 <- read_xlsx("birthcharacteristics2020correction.xlsx",
+                     sheet=5, 
+                     skip=4) %>%
+  select(1,2,4,16) %>%
+  rename(area_code=1, area=2, total=3, per_lbw=4) %>%
+  drop_na() %>%
+  filter(str_detect(area, "Cardiff") | str_detect(area, "Vale of Glamorgan") | str_detect(area, "WALES")) %>%
+  add_column(year=2020)
+
+bw_2021 <- read_xlsx("correctionsbirthcharacteristics2021workbook6.xlsx",
+                     sheet=5,
+                     skip=7) %>%
+  select(1,2,4,16) %>%
+  rename(area_code=1, area=2, total=3, per_lbw=4) %>%
+  drop_na() %>%
+  filter(str_detect(area, "Cardiff") | str_detect(area, "Vale of Glamorgan") | str_detect(area, "WALES")) %>%
+  add_column(year=2021)
+
+bw_2022 <- read_xlsx("birthcharacteristics2022.xlsx",
+                     sheet=4,
+                     skip=7) %>%
+  select(1,2,4,16) %>%
+  rename(area_code=1, area=2, total=3, per_lbw=4) %>%
+  drop_na() %>%
+  filter(str_detect(area, "Cardiff") | str_detect(area, "Vale of Glamorgan") | str_detect(area, "WALES")) %>%
+  add_column(year=2022)
+
+bw_all <- bind_rows(bw_2017, bw_2018, bw_2019, bw_2020, bw_2021, bw_2021, bw_2022)
+
+#remove england/wales data
+
+bw_all <- bw_all[!grepl("ENGLAND", bw_all$area),] %>%
+  mutate(per_lbw = as.numeric(per_lbw))
+
+#merge Cardiff and Vale data as very similar
+
+#strip out total denominator data by area
+
+denom <- bw_all %>%
+  mutate(area = case_when(
+    area == "Vale of Glamorgan" ~ "Cardiff & Vale",
+    area == "Cardiff" ~ "Cardiff & Vale",
+    area == "WALES" ~ "Wales",
+    TRUE ~ as.character(area)
+  )) %>%
+  select(1,2,3,5) %>%
+  group_by(area, year) %>%
+  summarise(total = sum(total)) %>%
+  ungroup()
+
+#calculate median lwb for CAV
+
+medians <- bw_all %>%
+  mutate(area = case_when(
+    area == "Vale of Glamorgan" ~ "Cardiff & Vale",
+    area == "Cardiff" ~ "Cardiff & Vale",
+    area == "WALES" ~ "Wales",
+    TRUE ~ as.character(area)
+  )) %>%
+  select(1,2,4,5) %>%
+  group_by(area, year) %>%
+  summarise(per_lbw = median(per_lbw)) %>%
+  ungroup()
+
+bw_all <- left_join(denom, medians, by = c("area", "year"))
+
+#calculate 95% CIs
+
+bw_all <- bw_all %>%
+  mutate(se = sqrt(per_lbw*(100-per_lbw)/total),
+         lci=per_lbw-(1.96*se),
+         uci=per_lbw+(1.96*se))
+
+bw_all_perc <- bw_all %>%
+  mutate(area = as.factor(area)) %>%
+  mutate(area = fct_relevel(area, c("Wales", "Cardiff & Vale"))) %>%
+  ggplot(aes(x=year, y=per_lbw, colour=area, group=area)) + 
+  geom_line(size=2) + 
+  geom_errorbar(aes(ymin=lci, ymax=uci), 
+                colour="black", width=0.1) + 
+  scale_colour_manual(values = c("#49b869", "#194e82")) + 
+  labs(x=NULL, y="%") +
+  guides(colour = guide_legend(title = NULL)) + 
+  scale_y_continuous(labels = scales::percent_format(scale = 1))
+
+bw_all_abs <- bw_all %>%
+  mutate(area = as.factor(area)) %>%
+  mutate(area = fct_relevel(area, c("Wales", "Cardiff & Vale"))) %>%
+  mutate(bw_abs = total*(per_lbw/100)) %>%
+  ggplot(aes(x=year, y=bw_abs, colour=area, group=area)) + 
+  geom_line(size = 2) + 
+  scale_colour_manual(values = c("#49b869", "#194e82")) + 
+  labs(x=NULL, y="Number") +
+  guides(colour = guide_legend(title = NULL))
+
+bw_all_perc / plot_spacer() / bw_all_abs + 
+plot_annotation(caption = " Office of National Statistics, 2024.")
+
+```
+
+## Most pregnant women are booked by 10 weeks, though there are likely inequalities
+
+::: notes
+
+```{r antenatal_notes, echo = FALSE, warning = FALSE, message = FALSE}
+knitr::opts_chunk$set(echo = FALSE, fig.width=30,fig.height=10)
+
+book_an <- read_xlsx("maternity_10wks_lhb_23.xlsx")
+
+book_an_nos <- read_xlsx("maternity_10wks_lhb_23_raw_numbers.xlsx")
+
+an_2023 <- bind_cols(book_an, book_an_nos) %>%
+  rename(area=1, perc_10wk=2, abs_10wk=13) %>%
+  select(1,2,13)
+
+an_2023 <- an_2023 %>%
+  mutate(se=sqrt(perc_10wk*(100-perc_10wk)/abs_10wk),
+         lci=perc_10wk-(1.96*se),
+         uci=perc_10wk+(1.96*se))
+
+paste0(round(an_2023 %>% filter(area == "Cardiff & Vale") %>% select(perc_10wk), 2), "% of pregnant women in Cardiff & Vale in 2023 were booked by antenatal services by 10 weeks.")
+
+```
+
+:::
+
+```{r antenatal, echo = FALSE, warning = FALSE, message = FALSE}
+knitr::opts_chunk$set(echo = FALSE, fig.width=30,fig.height=10)
+
+book_an <- read_xlsx("maternity_10wks_lhb_23.xlsx")
+
+book_an_nos <- read_xlsx("maternity_10wks_lhb_23_raw_numbers.xlsx")
+
+an_2023 <- bind_cols(book_an, book_an_nos) %>%
+  rename(area=1, perc_10wk=2, abs_10wk=13) %>%
+  select(1,2,13)
+
+an_2023 <- an_2023 %>%
+  mutate(se=sqrt(perc_10wk*(100-perc_10wk)/abs_10wk),
+         lci=perc_10wk-(1.96*se),
+         uci=perc_10wk+(1.96*se))
+
+an_2023 %>%
+  filter(area == "Cardiff & Vale" | area == "Wales") %>%
+  #mutate(perc_10wk = perc_10wk/100) %>%
+  mutate(area = as.factor(area)) %>%
+  mutate(area = fct_relevel(area, c("Cardiff & Vale", "Wales"))) %>%
+  ggplot(aes(x=reorder(area, perc_10wk), y=perc_10wk, fill=area, group=area)) + 
+  geom_bar(stat="identity", width = 0.2) + 
+  geom_errorbar(aes(ymin=lci, ymax=uci), 
+                colour="black", width=0.1) + 
+  coord_flip() + 
+  ylim(0,100) + 
+  scale_fill_manual(values = c("#194e82", "#49b869")) +
+  labs(x=NULL, y="\n% women booked antenatally by 10 weeks") + 
+  guides(fill = guide_legend(title = NULL)) + 
+      scale_y_continuous(labels = scales::percent_format(scale = 1)) + 
+  plot_annotation(caption = " StatWales, 2024.")
+```
+
+## 60220 children did not receive their health visiting appointments during the 2020-2023 (including COVID-19 pandemic) period
+
+::: notes
+
+```{r health_vis_notes, echo = FALSE, warning = FALSE, message = FALSE}
+knitr::opts_chunk$set(echo = FALSE, fig.width=30,fig.height=10)
+
+hcw_2020 <- read_xlsx("hcw_2020.xlsx") %>%
+  add_column(year=2020) %>%
+  rename(area_name=1)
+
+hcw_2021 <- read_xlsx("hcw_2021.xlsx") %>%
+  add_column(year=2021) %>%
+  rename(area_name=1)
+
+hcw_2022 <- read_xlsx("hcw_2022.xlsx") %>%
+  add_column(year = 2022) %>%
+  rename(area_name=1)
+
+hcw_2023 <- read_xlsx("hcw_2023.xlsx") %>%
+  add_column(year = 2023) %>%
+  rename(area_name=1)
+
+hcw_all <- bind_rows(hcw_2020, hcw_2021, hcw_2022, hcw_2023)
+
+hcw_all <- hcw_all %>%
+  rename(contact_10d=2, gp_check=3, 
+         wt_8wk=4, wt_12wk=5, wt_16wk=6, 
+         contact_6m=7, hv_15m=8, hv_27m=9,
+         contact_3.5y=10, all_contacts=11)
+
+hcw_all <- hcw_all %>%
+  rowwise() %>%
+  mutate(avg_0 = mean(contact_10d, gp_check, wt_8wk, wt_12wk, wt_16wk, contact_6m)) %>%
+  select(area_name, hv_15m, hv_27m, contact_3.5y, year, avg_0) %>%
+  filter(area_name == "Cardiff" | area_name == "Vale of Glamorgan")
+  
+         
+hcw_denom <- read_xlsx("hcw_denom.xlsx") %>%
+  rename(area_name = la) %>%
+  mutate(area_name = case_when(
+    area_name == "cardiff" ~ "Cardiff",
+    area_name == "vog" ~ "Vale of Glamorgan"))
+
+hcw_popn <- left_join(hcw_all, hcw_denom,
+          by = c("year", "area_name"))
+
+hcw_missing <- hcw_popn %>%
+  mutate(abs_0 = births*avg_0/100,
+         abs_12m = `12m`*hv_15m/100, 
+         abs_24m = `24m`*hv_27m/100,
+         abs_36m = `36m`*contact_3.5y/100) %>%
+  select(area_name, year, abs_0, abs_12m, 
+         abs_24m, abs_36m) %>%
+  group_by(area_name) %>% summarise(abs_0 = sum(abs_0),
+                                    abs_12m = sum(abs_12m),
+                                    abs_24m = sum(abs_24m),
+                                    abs_36m = sum(abs_36m)) %>%
+  mutate(total = abs_0+abs_12m+abs_24m+abs_36m)
+
+paste0(round(hcw_missing %>% filter(area_name == "Cardiff") %>% select(total), 0), " children in Cardiff and ", round(hcw_missing %>% filter(area_name == "Vale of Glamorgan") %>% select(total), 0), " in the Vale of Glamorgan did not receive their full health visiting appointments during the COVID pandemic period 2020-2023.")
+
+```
+:::
+
+```{r health_vis, echo = FALSE, warning = FALSE, message = FALSE}
+knitr::opts_chunk$set(echo = FALSE, fig.width=30,fig.height=10)
+
+hcw_2020 <- read_xlsx("hcw_2020.xlsx") %>%
+  add_column(year=2020) %>%
+  rename(area_name=1)
+
+hcw_2021 <- read_xlsx("hcw_2021.xlsx") %>%
+  add_column(year=2021) %>%
+  rename(area_name=1)
+
+hcw_2022 <- read_xlsx("hcw_2022.xlsx") %>%
+  add_column(year = 2022) %>%
+  rename(area_name=1)
+
+hcw_2023 <- read_xlsx("hcw_2023.xlsx") %>%
+  add_column(year = 2023) %>%
+  rename(area_name=1)
+
+hcw_all <- bind_rows(hcw_2020, hcw_2021, hcw_2022, hcw_2023)
+
+hcw_all <- hcw_all %>%
+  rename(contact_10d=2, gp_check=3, 
+         wt_8wk=4, wt_12wk=5, wt_16wk=6, 
+         contact_6m=7, hv_15m=8, hv_27m=9,
+         contact_3.5y=10, all_contacts=11)
+
+hcw_all <- hcw_all %>%
+  rowwise() %>%
+  mutate(avg_0 = mean(contact_10d, gp_check, wt_8wk, wt_12wk, wt_16wk, contact_6m)) %>%
+  select(area_name, hv_15m, hv_27m, contact_3.5y, year, avg_0) %>%
+  filter(area_name == "Cardiff" | area_name == "Vale of Glamorgan")
+  
+         
+hcw_denom <- read_xlsx("hcw_denom.xlsx") %>%
+  rename(area_name = la) %>%
+  mutate(area_name = case_when(
+    area_name == "cardiff" ~ "Cardiff",
+    area_name == "vog" ~ "Vale of Glamorgan"))
+
+hcw_popn <- left_join(hcw_all, hcw_denom,
+          by = c("year", "area_name"))
+
+hcw_missing <- hcw_popn %>%
+  mutate(abs_0 = births*avg_0/100,
+         abs_12m = `12m`*hv_15m/100, 
+         abs_24m = `24m`*hv_27m/100,
+         abs_36m = `36m`*contact_3.5y/100) %>%
+  select(area_name, year, abs_0, abs_12m, 
+         abs_24m, abs_36m) %>%
+  group_by(area_name) %>% summarise(abs_0 = sum(abs_0),
+                                    abs_12m = sum(abs_12m),
+                                    abs_24m = sum(abs_24m),
+                                    abs_36m = sum(abs_36m)) %>%
+  mutate(total = abs_0+abs_12m+abs_24m+abs_36m)
+
+hv_missing <- hcw_missing %>%
+  mutate(area_name = as.factor(area_name)) %>%
+  mutate(area_name = fct_relevel(area_name, c("Cardiff", "Vale of Glamorgan"))) %>%
+  ggplot(aes(x=reorder(area_name, total), y=total, fill=area_name)) + 
+  geom_bar(stat="identity", width = 0.2) + 
+  coord_flip() + 
+  scale_fill_manual(values = c("#eb008b", "#3a90ce")) +
+  guides(fill = guide_legend(title = NULL)) + 
+  labs(x=NULL, y=NULL) + 
+  scale_y_continuous(labels = c(0, 20000, 40000),
+                     breaks = c(0, 20000, 40000))
+
+#percentage
+
+#percentages from StatsWales for 3.5y contacts (https://statswales.gov.wales/Catalogue/Health-and-Social-Care/NHS-Primary-and-Community-Activity/Healthy-Child-Wales-Programme/percentageofeligiblechildrenwithrecordedhealthychildwalescontacts-by-localauthority-quarter) are Cardiff (83.4, 90.5) and VOG (86.2, 91.4) respectively. 
+
+#(83.4+90.5)/2
+#86.95
+
+#(86.2+91.4)/2
+#88.8
+
+hcw_trend <- hcw_popn %>%
+  select(area_name, contact_3.5y, year) %>%
+  add_row(area_name = "Cardiff", 
+          contact_3.5y = 86.95,
+          year = 2024) %>%
+  add_row(area_name = "Vale of Glamorgan", 
+          contact_3.5y = 88.8,
+          year = 2024) %>%
+  add_row(area_name = "Cardiff", 
+          contact_3.5y = 69.1, 
+          year = 2018) %>%
+  add_row(area_name = "Vale of Glamorgan", 
+          contact_3.5y = 74.1, 
+          year = 2018) %>%
+  add_row(area_name = "Cardiff", 
+          contact_3.5y = 77.2,
+          year = 2019) %>%
+  add_row(area_name = "Vale of Glamorgan", 
+          contact_3.5y = 81.5,
+          year = 2019)
+
+
+hv_trend <- hcw_trend %>%
+  #mutate(area_name = as.factor(area_name)) %>%
+  #mutate(area_name = fct_relevel(area_name, c("Vale of Glamorgan", "Cardiff"))) %>%
+  ggplot(aes(x=year, y=contact_3.5y, colour=area_name)) + 
+  geom_line(size=2) +
+  scale_colour_manual(values = c("#eb008b", "#3a90ce")) + 
+  labs(x=NULL, y=NULL) +
+  guides(colour = guide_legend(title = NULL)) + 
+  ylim(0,100)
+
+hv_missing / hv_trend + 
+plot_annotation(caption = " StatsWales, 2024.")
+
+```
+
+## Children in the most deprived areas are more likely to be living with obesity
+
+::: notes
+
+```{r cmp_notes, echo = FALSE, warning = FALSE, message = FALSE}
+knitr::opts_chunk$set(echo = FALSE, fig.width=30,fig.height=10)
+
+cmp_2223 <- read_xlsx("2. CMP_Data_2022_2023.xlsx",
+                      sheet = 17,
+                      skip = 4)
+
+cmp_2223 <- cmp_2223 %>%
+  filter(Geography == "Cardiff" | Geography == "Vale of Glamorgan") %>%
+  select(Geography, `Deprivation fifth`, `Obese (%)`, `Obese (95% CI)`) %>%
+  filter(`Deprivation fifth` == "LA Least deprived fifth" | `Deprivation fifth`== "LA Most deprived fifth") %>%
+  add_column(lci = c(4.2, 7.7, 3.4, 11.4), 
+             uci = c(11.3, 14.6, 6.5, 15.6)) %>%
+  select(Geography, 2, 3, 5, 6) %>%
+  select(-lci, -uci) %>%
+  pivot_wider(names_from = `Deprivation fifth`, 
+              values_from = `Obese (%)`) %>%
+  add_column(lci_least = c(4.2, 3.4), 
+             lci_most = c(10.6, 13.4),
+             uci_least = c(11.3, 6.5),
+             uci_most = c(14.6, 15.6)) %>%
+  rename(la_least=2, la_most=3)
+
+paste0(cmp_2223 %>% filter(Geography == "Cardiff") %>% select(la_most), "% (95% CI ", cmp_2223 %>% filter(Geography == "Cardiff") %>% select(lci_most), "-", cmp_2223 %>% filter(Geography == "Cardiff") %>% select(uci_most),  ") of children living in the most deprived areas of Cardiff in 2023-24 had a weight over the 95th centile, compared with ", cmp_2223 %>% filter(Geography == "Cardiff") %>% select(la_least), "% (95% CI ", cmp_2223 %>% filter(Geography == "Cardiff") %>% select(lci_least), "-", cmp_2223 %>% filter(Geography == "Cardiff") %>% select(uci_least) ,"%) of children in the least deprived areas")
+
+```
+
+:::
+
+```{r cmp, echo = FALSE, warning = FALSE, message = FALSE}
+knitr::opts_chunk$set(echo = FALSE, fig.width=30,fig.height=10)
+
+cmp_2223 <- read_xlsx("2. CMP_Data_2022_2023.xlsx",
+                      sheet = 17,
+                      skip = 4)
+
+cmp_2223 %>%
+  filter(Geography == "Cardiff" | Geography == "Vale of Glamorgan") %>%
+  select(Geography, `Deprivation fifth`, `Obese (%)`, `Obese (95% CI)`) %>%
+  filter(`Deprivation fifth` == "LA Least deprived fifth" | `Deprivation fifth`== "LA Most deprived fifth") %>%
+  add_column(lci = c(4.2, 7.7, 3.4, 11.4), 
+             uci = c(11.3, 14.6, 6.5, 15.6)) %>%
+  select(Geography, 2, 3, 5, 6) %>%
+  select(-lci, -uci) %>%
+  pivot_wider(names_from = `Deprivation fifth`, 
+              values_from = `Obese (%)`) %>%
+  add_column(lci_least = c(4.2, 3.4), 
+             lci_most = c(10.6, 13.4),
+             uci_least = c(11.3, 6.5),
+             uci_most = c(14.6, 15.6)) %>%
+  rename(la_least=2, la_most=3) %>%
+  mutate(Geography = as.factor(Geography)) %>%
+  mutate(Geography = fct_relevel(Geography, c("Vale of Glamorgan", "Cardiff"))) %>%
+    ggplot() + 
+    geom_linerange(aes(x=Geography, ymin=la_least,
+                       ymax=la_most),
+                   colour = "black", size = 2) +
+  geom_point(aes(x=Geography, y=la_least, colour="colour1"), 
+             size = 20) + 
+  geom_point(aes(x=Geography, y=la_most, colour="colour2"), 
+             size = 20) + 
+  coord_flip() + 
+  ylim(0,20) + 
+  labs(x=NULL, y="\n% with weight over 95th centile", caption = " Child Measurement Programme, Public Health Wales, 2024.") + 
+  scale_colour_manual(name = NULL,
+                      values=c(colour2="#3a8fcf", 
+                               colour1="#f38120"),
+                      labels = c("Least deprived", "Most deprived"))
+```
+
+## Child vaccination by age 4-5y in more deprived areas is below the level known to protect from infections such as measles
+
+::: notes
+
+```{r imms_notes, echo = FALSE, warning = FALSE, message = FALSE}
+knitr::opts_chunk$set(echo = FALSE, fig.width=30,fig.height=10)
+
+imms <- read_xlsx("cav_wimd_imms_0922.xlsx")
+
+#check uptake first if no sig change no point in time-series
+
+imms<- imms %>%
+  mutate(year = str_sub(year, end=4)) %>%
+  select(year, wimd1_imm, wimd1_popn, wimd1_uptake, 
+         wimd5_imm, wimd5_popn, wimd5_uptake) %>%
+  mutate(se_1 = sqrt(wimd1_uptake*(1-wimd1_uptake)/wimd1_imm),
+         se_5 = sqrt(wimd5_uptake*(1-wimd5_uptake)/wimd5_imm),
+         lci_1 = wimd1_uptake-(1.96*se_1),
+         uci_1 = wimd1_uptake+(1.96*se_1),
+         lci_5 = wimd5_uptake-(1.96*se_1),
+         uci_5 = wimd5_uptake+(1.96*se_1)) %>%
+  select(year, wimd1_uptake, lci_1, uci_1, 
+         wimd5_uptake, lci_5, uci_5) 
+
+paste0(round(imms %>% filter(year == 2022) %>% select(wimd1_uptake)*100, 2), "% of children aged 4-5, (95% CI ", round(imms %>% filter(year == 2022) %>% select(lci_1)*100, 2), "-", round(imms %>% filter(year == 2022) %>% select(uci_1)*100, 2), "%) in the most deprived areas in Cardiff & Vale were fully vaccinated in 2022, compared with ", round(imms %>% filter(year == 2022) %>% select(wimd5_uptake)*100, 2), "% of children aged 4-5, (95% CI ", round(imms %>% filter(year == 2022) %>% select(lci_5)*100, 2), "-", round(imms %>% filter(year == 2022) %>% select(uci_5)*100, 2), "%) in the least deprived areas")
+```
+:::
+
+```{r imms, echo = FALSE, warning = FALSE, message = FALSE}
+knitr::opts_chunk$set(echo = FALSE, fig.width=30,fig.height=10)
+
+imms <- read_xlsx("cav_wimd_imms_0922.xlsx")
+
+#check uptake first if no sig change no point in time-series
+
+imms %>%
+  mutate(year = str_sub(year, end=4)) %>%
+  select(year, wimd1_imm, wimd1_popn, wimd1_uptake, 
+         wimd5_imm, wimd5_popn, wimd5_uptake) %>%
+  mutate(se_1 = sqrt(wimd1_uptake*(1-wimd1_uptake)/wimd1_imm),
+         se_5 = sqrt(wimd5_uptake*(1-wimd5_uptake)/wimd5_imm),
+         lci_1 = wimd1_uptake-(1.96*se_1),
+         uci_1 = wimd1_uptake+(1.96*se_1),
+         lci_5 = wimd5_uptake-(1.96*se_1),
+         uci_5 = wimd5_uptake+(1.96*se_1)) %>%
+  select(year, wimd1_uptake, lci_1, uci_1, 
+         wimd5_uptake, lci_5, uci_5) %>%
+  ggplot(aes(x=year)) + 
+  geom_line(aes(y=wimd1_uptake, group=1, colour="colour1"), 
+                size = 2) + 
+  geom_line(aes(y=wimd5_uptake, group=2, colour="colour2"), 
+                size = 2) + 
+  geom_errorbar(aes(ymin=lci_1, ymax=uci_1),
+                width = 0.1, linetype = "dashed") + 
+  geom_errorbar(aes(ymin=lci_5, ymax=uci_5), 
+                width = 0.1, linetype = "dashed") + 
+  theme(axis.text.x = element_text(angle=90)) + 
+  scale_colour_manual(name = NULL,
+                      values=c(colour2="#f38120",colour1="#3a8fcf"),
+                      labels = c("Least deprived", "Most deprived"), 
+breaks = c("colour2", "colour1")) + 
+  ylim(0.7,1) + 
+  scale_y_continuous(labels = scales::percent) + 
+  labs(x=NULL, y="Percentage (%)", caption = " Public Health Wales, 2024.") + 
+  geom_hline(yintercept = 0.95, 
+             linetype = "dashed") + 
+  annotate(x=2.5, y=0.94, "text", label = c("95% population uptake"), size=12, colour = "red")
+```
+
+## Children in most deprived areas accessed less dental services in 2023, though progress has been made in prioritisation
+
+::: notes
+
+```{r dent_notes, echo = FALSE, warning = FALSE, message = FALSE}
+knitr::opts_chunk$set(echo = FALSE, fig.width=30,fig.height=10)
+
+gds <- read_xlsx("gds_2324.xlsx")
+
+#generate CIs
+
+gds <- gds %>%
+  mutate(se = sqrt(perc_seen*(1-perc_seen)/popn),
+         lci = perc_seen-(1.96*se),
+         uci = perc_seen+(1.96*se))
+
+paste0(gds %>% filter(wimd == 1) %>% select(perc_seen)*100, "% of children, (95% CI ", round(gds %>% filter(wimd == 1) %>% select(lci)*100, 2), "-", round(gds %>% filter(wimd == 1) %>% select(uci)*100, 2), "%) in the most deprived areas in Cardiff & Vale in 2023 accessed dental services, compared with ", gds %>% filter(wimd == 5) %>% select(perc_seen)*100, "% of children (95% CI ", round(gds %>% filter(wimd == 1) %>% select(lci)*100, 2), "-", round(gds %>% filter(wimd == 1) %>% select(uci)*100, 2), ") in the least deprived areas.")
+
+```
+:::
+
+```{r dent, echo = FALSE, warning = FALSE, message = FALSE}
+knitr::opts_chunk$set(echo = FALSE, fig.width=30,fig.height=10)
+
+gds <- read_xlsx("gds_2324.xlsx")
+
+#generate CIs
+
+gds %>%
+  mutate(se = sqrt(perc_seen*(1-perc_seen)/popn),
+         lci = perc_seen-(1.96*se),
+         uci = perc_seen+(1.96*se)) %>%
+  filter(wimd %in% c(1,2,3,4,5)) %>%
+   mutate(wimd = case_when(
+    wimd == 1 ~ "1 - Most deprived",
+    wimd == 5 ~ "5 - Least deprived",
+    TRUE ~ as.character(wimd)
+  )) %>%
+  ggplot(aes(x=wimd, y=perc_seen, fill=wimd)) + 
+  geom_bar(stat = "identity", width = 0.5) + 
+  geom_errorbar(aes(ymin=lci, ymax=uci), width = 0.1) + 
+  ylim(0,0.5) + coord_flip() + 
+  scale_fill_viridis_d() + 
+  labs(y="\nPercentage seen dentist in 2023 (%)", x=NULL, 
+caption = " Dental Public Health team, Public Health Wales, 2024.") +
+    guides(colour = guide_legend(title = "WIMD quintile")) + 
+    scale_y_continuous(labels = scales::percent)
+
+
+```
+
+## 2021-22 data suggests most children are benefiting from Healthy Start vouchers
+
+::: notes
+
+```{r healthy_start_notes, echo = FALSE, warning = FALSE, message = FALSE}
+knitr::opts_chunk$set(echo = FALSE, fig.width=30,fig.height=10)
+
+path <- "Wales-Uptake-Data-August-2021-to-March-2022.xlsx"
+
+hs_data <- path %>%
+  excel_sheets() %>%
+  set_names() %>%
+  map(read_xlsx, path = path)
+
+hs_aug21 <- hs_data$`Aug-21` %>%
+  slice(4:n()) %>%
+  row_to_names(row_number = 1) %>%
+  #filter(`Local Authority` %in% c("Cardiff", "Vale of Glamorgan")) %>%
+  select(-1) %>%
+  add_column(period = "Aug-21")
+
+hs_sep21 <- hs_data$`Sep-21` %>%
+  slice(3:n()) %>%
+  row_to_names(row_number = 1) %>%
+  #filter(`Local Authority` %in% c("Cardiff", "Vale of Glamorgan")) %>%
+  select(-1) %>%
+  add_column(period = "Sept-21")
+
+hs_oct_21 <- hs_data$`Oct-21` %>%
+  slice(3:n()) %>%
+  row_to_names(row_number = 1) %>%
+  #filter(`Local Authority` %in% c("Cardiff", "Vale of Glamorgan")) %>%
+  select(-1) %>%
+  add_column(period = "Oct-21")
+
+hs_nov21 <- hs_data$`Nov-21` %>% 
+  slice(3:n()) %>%
+  row_to_names(row_number = 1) %>%
+  #filter(`Local Authority` %in% c("Cardiff", "Vale of Glamorgan")) %>%
+  select(-1) %>%
+  add_column(period = "Nov-21")
+
+hs_dec21 <- hs_data$`Dec-21` %>%
+  slice(3:n()) %>%
+  row_to_names(row_number = 1) %>%
+  #filter(`Local Authority` %in% c("Cardiff", "Vale of Glamorgan")) %>%
+  select(-1) %>%
+  add_column(period = "Dec-21")
+
+hs_jan22 <- hs_data$`Jan-22` %>%
+  slice(3:n()) %>%
+  row_to_names(row_number = 1) %>%
+  #filter(`Local Authority` %in% c("Cardiff", "Vale of Glamorgan")) %>%
+  select(-1) %>%
+  add_column(period = "Jan-22")
+
+hs_feb22 <- hs_data$`Feb-22` %>%
+  slice(3:n()) %>%
+  row_to_names(row_number = 1) %>%
+  #filter(`Local Authority` %in% c("Cardiff", "Vale of Glamorgan")) %>%
+  select(-1) %>%
+  add_column(period = "Feb-22")
+
+hs_mar22 <- hs_data$`Mar-22` %>%
+  slice(3:n()) %>%
+  row_to_names(row_number = 1) %>%
+  #filter(`Local Authority` %in% c("Cardiff", "Vale of Glamorgan")) %>%
+  select(-1) %>%
+  add_column(period = "Mar-22")
+
+councils = c("Cardiff", "Vale of Glamorgan")
+
+hs_df <- bind_rows(hs_aug21, hs_sep21, hs_oct_21, hs_nov21, hs_dec21, 
+                   hs_jan22, hs_feb22, hs_mar22) %>%
+  select(1, 2, 3, 4, 5) %>%
+  rename(la=1, receiving=2, eligible=3, uptake=4, period=5) %>%
+  mutate(receiving = as.numeric(receiving),
+         uptake = as.numeric(uptake), 
+         eligible = as.numeric(eligible))
+
+#filter out C and VOG data
+
+hs_cvog <- hs_df %>%
+  filter(la %in% c("Cardiff", "Vale of Glamorgan")) %>%
+  mutate(se = sqrt(uptake*(100-uptake)/receiving),
+         lci = uptake-(1.96*se),
+         uci = uptake+(1.96*se)) %>%
+  group_by(la) %>%
+  summarise(uptake = median(uptake),
+            lci = median(lci),
+            uci = median(uci),
+            receiving = median(receiving),
+            eligible = median(eligible)
+  ) %>%
+  mutate(missing = eligible - receiving)
+
+#create median for all LAs in Wales
+
+hs_median <- hs_df %>%
+  mutate(se = sqrt(uptake*(100-uptake)/receiving),
+         lci = uptake-(1.96*se),
+         uci = uptake+(1.96*se)) %>%
+  summarise(uptake = median(uptake),
+            lci = median(lci),
+            uci = median(uci),
+            receiving = median(receiving),
+            eligible = median(eligible)
+  ) %>%
+  mutate(missing = eligible - receiving) %>%
+  add_column(la = c("Wales"))
+
+#bind rows
+
+hs_la_wales <- bind_rows(hs_median, hs_cvog)
+
+paste0(hs_la_wales %>% filter(la == "Cardiff") %>% select(uptake), "% of families, (95% CI ", round(hs_la_wales %>% filter(la == "Cardiff") %>% select(lci), 2), "-", round(hs_la_wales %>% filter(la == "Cardiff") %>% select(uci), 2), "%) in Cardiff entitled to Healthy Start vouchers benefited from the entitlement in 2021-22. ", hs_la_wales %>% filter(la == "Vale of Glamorgan") %>% select(uptake), "% of families entitled to the benefit, (95% CI ", round(hs_la_wales %>% filter(la == "Vale of Glamorgan") %>% select(lci), 2), "-", round(hs_la_wales %>% filter(la == "Vale of Glamorgan") %>% select(uci), 2), "%) in the Vale of Glamorgan benefited.")
+
+```
+
+:::
+
+```{r healthy_start, echo = FALSE, warning = FALSE, message = FALSE}
+knitr::opts_chunk$set(echo = FALSE, fig.width=30,fig.height=10)
+
+path <- "Wales-Uptake-Data-August-2021-to-March-2022.xlsx"
+
+hs_data <- path %>%
+  excel_sheets() %>%
+  set_names() %>%
+  map(read_xlsx, path = path)
+
+hs_aug21 <- hs_data$`Aug-21` %>%
+  slice(4:n()) %>%
+  row_to_names(row_number = 1) %>%
+  #filter(`Local Authority` %in% c("Cardiff", "Vale of Glamorgan")) %>%
+  select(-1) %>%
+  add_column(period = "Aug-21")
+
+hs_sep21 <- hs_data$`Sep-21` %>%
+  slice(3:n()) %>%
+  row_to_names(row_number = 1) %>%
+  #filter(`Local Authority` %in% c("Cardiff", "Vale of Glamorgan")) %>%
+  select(-1) %>%
+  add_column(period = "Sept-21")
+
+hs_oct_21 <- hs_data$`Oct-21` %>%
+  slice(3:n()) %>%
+  row_to_names(row_number = 1) %>%
+  #filter(`Local Authority` %in% c("Cardiff", "Vale of Glamorgan")) %>%
+  select(-1) %>%
+  add_column(period = "Oct-21")
+
+hs_nov21 <- hs_data$`Nov-21` %>% 
+  slice(3:n()) %>%
+  row_to_names(row_number = 1) %>%
+  #filter(`Local Authority` %in% c("Cardiff", "Vale of Glamorgan")) %>%
+  select(-1) %>%
+  add_column(period = "Nov-21")
+
+hs_dec21 <- hs_data$`Dec-21` %>%
+  slice(3:n()) %>%
+  row_to_names(row_number = 1) %>%
+  #filter(`Local Authority` %in% c("Cardiff", "Vale of Glamorgan")) %>%
+  select(-1) %>%
+  add_column(period = "Dec-21")
+
+hs_jan22 <- hs_data$`Jan-22` %>%
+  slice(3:n()) %>%
+  row_to_names(row_number = 1) %>%
+  #filter(`Local Authority` %in% c("Cardiff", "Vale of Glamorgan")) %>%
+  select(-1) %>%
+  add_column(period = "Jan-22")
+
+hs_feb22 <- hs_data$`Feb-22` %>%
+  slice(3:n()) %>%
+  row_to_names(row_number = 1) %>%
+  #filter(`Local Authority` %in% c("Cardiff", "Vale of Glamorgan")) %>%
+  select(-1) %>%
+  add_column(period = "Feb-22")
+
+hs_mar22 <- hs_data$`Mar-22` %>%
+  slice(3:n()) %>%
+  row_to_names(row_number = 1) %>%
+  #filter(`Local Authority` %in% c("Cardiff", "Vale of Glamorgan")) %>%
+  select(-1) %>%
+  add_column(period = "Mar-22")
+
+councils = c("Cardiff", "Vale of Glamorgan")
+
+hs_df <- bind_rows(hs_aug21, hs_sep21, hs_oct_21, hs_nov21, hs_dec21, 
+                   hs_jan22, hs_feb22, hs_mar22) %>%
+  select(1, 2, 3, 4, 5) %>%
+  rename(la=1, receiving=2, eligible=3, uptake=4, period=5) %>%
+  mutate(receiving = as.numeric(receiving),
+         uptake = as.numeric(uptake), 
+         eligible = as.numeric(eligible))
+
+#filter out C and VOG data
+
+hs_cvog <- hs_df %>%
+  filter(la %in% c("Cardiff", "Vale of Glamorgan")) %>%
+  mutate(se = sqrt(uptake*(100-uptake)/receiving),
+         lci = uptake-(1.96*se),
+         uci = uptake+(1.96*se)) %>%
+  group_by(la) %>%
+  summarise(uptake = median(uptake),
+            lci = median(lci),
+            uci = median(uci),
+            receiving = median(receiving),
+            eligible = median(eligible)
+  ) %>%
+  mutate(missing = eligible - receiving)
+
+#create median for all LAs in Wales
+
+hs_median <- hs_df %>%
+  mutate(se = sqrt(uptake*(100-uptake)/receiving),
+         lci = uptake-(1.96*se),
+         uci = uptake+(1.96*se)) %>%
+  summarise(uptake = median(uptake),
+            lci = median(lci),
+            uci = median(uci),
+            receiving = median(receiving),
+            eligible = median(eligible)
+  ) %>%
+  mutate(missing = eligible - receiving) %>%
+  add_column(la = c("Wales"))
+
+#bind rows
+
+hs_la_wales <- bind_rows(hs_median, hs_cvog)
+
+#Chart
+
+hs_la_wales %>%
+  ggplot(aes(x=la, y=uptake, fill=la)) + 
+  geom_bar(stat = "identity", width = 0.2) + 
+  geom_errorbar(aes(ymin=lci, ymax=uci), width = 0.1) + 
+  coord_flip() + ylim(0,100) + 
+  guides(fill = F) + 
+  labs(x=NULL, y="Coverage (%)", caption = " NHS Business Authority, 2024.") +
+  scale_fill_manual(name = NULL,
+                      values=c("#eb008b", "#3a90ce", "#49b869"),
+                      labels = c("Wales", "Vale of Glamorgan", 
+                                 "Cardiff"))
+
+```
+
+## Most eligible families are benefiting from Flying Start childcare, with likely benefits for child development and health
+
+::: notes
+
+```{r flying_start_notes, echo = FALSE, warning = FALSE, message = FALSE}
+knitr::opts_chunk$set(echo = FALSE, fig.width=30,fig.height=10)
+
+flying_start <- read_xlsx("flying_start_childcare_2124.xlsx")
+
+flying_start <- flying_start %>%
+  mutate(se = sqrt(perc*(1-perc)/uptake),
+         lci = perc-(1.96*se),
+         uci = perc+(1.96*se))
+
+paste0(round(flying_start %>% filter(year == "2023-24" & la == "Cardiff") %>% select(perc)*100, 2), "% (95% CI ", round(flying_start %>% filter(year == "2023-24" & la == "Cardiff") %>% select(lci)*100, 2), "-", round(flying_start %>% filter(year == "2023-24" & la == "Cardiff") %>% select(uci)*100, 2), "%) of eligible children in Cardiff in 2023-24 participated in Flying Start early years childcare. ", round(flying_start %>% filter(year == "2023-24" & la == "Vale of Glamorgan") %>% select(perc)*100, 2), "% (95% CI ", round(flying_start %>% filter(year == "2023-24" & la == "Vale of Glamorgan") %>% select(lci)*100, 2), "-", round(flying_start %>% filter(year == "2023-24" & la == "Vale of Glamorgan") %>% select(uci)*100, 2), "% of eligible children in the Vale of Glamorgan participated")
+
+```
+
+
+:::
+
+```{r flying_start, echo = FALSE, warning = FALSE, message = FALSE}
+knitr::opts_chunk$set(echo = FALSE, fig.width=30,fig.height=10)
+
+flying_start <- read_xlsx("flying_start_childcare_2124.xlsx")
+
+flying_start %>%
+  mutate(se = sqrt(perc*(1-perc)/uptake),
+         lci = perc-(1.96*se),
+         uci = perc+(1.96*se)) %>%
+  filter(year == "2023-24") %>%
+  ggplot(aes(x=la, y=perc, fill=la)) + 
+  geom_bar(stat = "identity", width = 0.2) + 
+  geom_errorbar(aes(ymin=lci, ymax=uci), width = 0.1) + 
+  coord_flip() + 
+  labs(x=NULL, y="\nPercentage (%)", caption = " Cardiff and Vale of Glamorgan Council, 2024.") + 
+  scale_fill_manual(name = NULL, values=c("#3a90ce", 
+                                          "#eb008b")) +  
+  guides(fill = F) +
+    scale_y_continuous(labels = scales::percent)
+
+```
+
+## School readiness data last published in 2019 suggested significant inequalities between social and gender groups
+
+::: notes 
+
+```{r school_readiness_notes, echo = FALSE, warning = FALSE, message = FALSE}
+knitr::opts_chunk$set(echo = FALSE, fig.width=30,fig.height=10)
+
+boys_la <- read_xlsx("found_phase_la_boys.xlsx") %>%
+  add_column(sex = "boys") %>%
+  rename(soc_dvt_diversity = 2, eng_lang = 3, 
+         welsh_lang = 4, maths = 5, fp_indic = 6) %>%
+  select(la, fp_indic, sex)
+
+girls_la <- read_xlsx("found_phase_la_girls.xlsx") %>%
+  add_column(sex = "girls") %>% 
+  rename(soc_dvt_diversity = 2, eng_lang = 3, 
+                                       welsh_lang = 4, maths = 5, fp_indic = 6) %>%
+  select(la, fp_indic, sex)
+
+ethnic <- read_xlsx("found_phase_national_ethnicity.xlsx") %>%
+  rename(soc_dvt_diversity = 2, eng_lang = 3,
+         maths = 4, fp_indic = 5)
+
+fsm <- read_xlsx("found_phase_national_fsm.xlsx") %>%
+  rename(fsm = 1, sex = 2, soc_dvt_diversity = 3, eng_lang = 4,
+         welsh_lang = 5, 
+         maths = 6, fp_indic = 7)
+
+#model fsm and ethnicity
+
+#include White British, Traveller, African
+
+ethnic_wide <- ethnic %>%
+  filter(ethnicity %in% c("White - British", "Traveller", "African")) %>%
+  select(-2, -3, -4) %>%
+  pivot_wider(names_from = ethnicity,
+              values_from = fp_indic) %>%
+  rename(white_brit=1, traveller=2, african=3)
+
+fsm_wide <- fsm %>%
+  select(-3, -4, -5, -6) %>%
+  filter(fsm %in% c("Eligible for FSM")) %>%
+  pivot_wider(names_from = sex, 
+              values_from = fp_indic) %>%
+  select(-1) %>%
+  rename(boys_fsm = 1, girls_fsm = 2)
+
+la_all <- bind_rows(boys_la, girls_la)
+
+school_read_ <- bind_cols(la_all, ethnic_wide, fsm_wide) %>%
+  filter(la %in% c("Cardiff", "Vale of Glamorgan")) %>%
+  add_column(vale_multipler_boys = 89.6-84.9) %>%
+  add_column(vale_multiplier_girls = 93.2-92.2) %>%
+  mutate(white_brit = as.numeric(white_brit),
+         traveller = as.numeric(traveller),
+         african = as.numeric(african))
+
+school_read_df <- school_read_ %>%
+  mutate(white_brit_boys = case_when(
+    la == "Vale of Glamorgan" ~ white_brit+vale_multipler_boys,
+    TRUE ~ as.numeric(white_brit))) %>%
+    mutate(traveller_boys = case_when(
+      la == "Vale of Glamorgan" ~ traveller+vale_multipler_boys,
+      TRUE ~ as.numeric(traveller))) %>%
+  mutate(african_boys = case_when(
+    la == "Vale of Glamorgan" ~ african+vale_multipler_boys,
+    TRUE ~ as.numeric(african))) %>%
+  mutate(white_brit_girls = case_when(
+    la == "Vale of Glamorgan" ~ white_brit+vale_multiplier_girls ,
+    TRUE ~ as.numeric(white_brit))) %>%
+  mutate(traveller_girls = case_when(
+    la == "Vale of Glamorgan" ~ traveller+vale_multiplier_girls ,
+    TRUE ~ as.numeric(traveller))) %>%
+  mutate(african_girls = case_when(
+    la == "Vale of Glamorgan" ~ african+vale_multiplier_girls ,
+    TRUE ~ as.numeric(african))) %>%
+  select(-c("white_brit", "traveller", "african", 
+            "vale_multiplier_girls", 
+            "vale_multipler_boys",
+            "fp_indic", "sex")) %>%
+  distinct() %>%
+  pivot_longer(cols = -c("la"),
+               names_to = "group", 
+               values_to = "fp_indic")
+
+school_read_df <- school_read_df %>%
+  mutate(group = case_when(
+    group == "boys_fsm" ~ "Boys on FSM",
+    group == "girls_fsm" ~ "Girls on FSM",
+    group == "white_brit_boys" ~ "White British boys",
+    group == "white_brit_girls" ~ "White British girls",
+    group == "traveller_boys" ~ "Boys of Traveller heritage",
+    group == "african_boys" ~ "Boys of Black heritage",
+    group == "white_brit_girls" ~ "White British boys",
+    group == "traveller_girls" ~ "Girls of Traveller heritage",
+    group == "african_girls" ~ "Girls of Black heritage",
+    TRUE ~ as.character(group)
+  ))
+
+paste0("The population group with the highest percentage of children assessed as ready for school in 2019 in Cardiff were boys of White British ethnicity (", round(school_read_df %>% filter(la == "Cardiff" & group == "White British boys") %>% select(fp_indic), 2), "% school ready. The population group with the lowest percentage of children assessed as ready for school in this period in Cardiff were girls from traveller backgrounds (", round(school_read_df %>% filter(la == "Cardiff" & group == "Girls of Traveller heritage") %>% select(fp_indic), 2), "% school ready).", "\nThe population group with the highest percentage of children assessed as ready for school in 2019 in the Vale of Glamorgan were boys of White British ethnicity (", round(school_read_df %>% filter(la == "Vale of Glamorgan" & group == "White British boys") %>% select(fp_indic), 2), "% school ready. The population group with the lowest percentage of children assessed as ready for school in this period in the Vale of Glamorgan were girls from traveller backgrounds (", round(school_read_df %>% filter(la == "Vale of Glamorgan" & group == "Girls of Traveller heritage") %>% select(fp_indic), 2), "% school ready).")
+
+```
+
+:::
+
+```{r school_readiness, echo = FALSE, warning = FALSE, message = FALSE}
+knitr::opts_chunk$set(echo = FALSE, fig.width=30,fig.height=10)
+
+boys_la <- read_xlsx("found_phase_la_boys.xlsx") %>%
+  add_column(sex = "boys") %>%
+  rename(soc_dvt_diversity = 2, eng_lang = 3, 
+         welsh_lang = 4, maths = 5, fp_indic = 6) %>%
+  select(la, fp_indic, sex)
+
+girls_la <- read_xlsx("found_phase_la_girls.xlsx") %>%
+  add_column(sex = "girls") %>% 
+  rename(soc_dvt_diversity = 2, eng_lang = 3, 
+                                       welsh_lang = 4, maths = 5, fp_indic = 6) %>%
+  select(la, fp_indic, sex)
+
+ethnic <- read_xlsx("found_phase_national_ethnicity.xlsx") %>%
+  rename(soc_dvt_diversity = 2, eng_lang = 3,
+         maths = 4, fp_indic = 5)
+
+fsm <- read_xlsx("found_phase_national_fsm.xlsx") %>%
+  rename(fsm = 1, sex = 2, soc_dvt_diversity = 3, eng_lang = 4,
+         welsh_lang = 5, 
+         maths = 6, fp_indic = 7)
+
+#model fsm and ethnicity
+
+#include White British, Traveller, African
+
+ethnic_wide <- ethnic %>%
+  filter(ethnicity %in% c("White - British", "Traveller", "African")) %>%
+  select(-2, -3, -4) %>%
+  pivot_wider(names_from = ethnicity,
+              values_from = fp_indic) %>%
+  rename(white_brit=1, traveller=2, african=3)
+
+fsm_wide <- fsm %>%
+  select(-3, -4, -5, -6) %>%
+  filter(fsm %in% c("Eligible for FSM")) %>%
+  pivot_wider(names_from = sex, 
+              values_from = fp_indic) %>%
+  select(-1) %>%
+  rename(boys_fsm = 1, girls_fsm = 2)
+
+la_all <- bind_rows(boys_la, girls_la)
+
+school_read_ <- bind_cols(la_all, ethnic_wide, fsm_wide) %>%
+  filter(la %in% c("Cardiff", "Vale of Glamorgan")) %>%
+  add_column(vale_multipler_boys = 89.6-84.9) %>%
+  add_column(vale_multiplier_girls = 93.2-92.2) %>%
+  mutate(white_brit = as.numeric(white_brit),
+         traveller = as.numeric(traveller),
+         african = as.numeric(african))
+
+school_read_df <- school_read_ %>%
+  mutate(white_brit_boys = case_when(
+    la == "Vale of Glamorgan" ~ white_brit+vale_multipler_boys,
+    TRUE ~ as.numeric(white_brit))) %>%
+    mutate(traveller_boys = case_when(
+      la == "Vale of Glamorgan" ~ traveller+vale_multipler_boys,
+      TRUE ~ as.numeric(traveller))) %>%
+  mutate(african_boys = case_when(
+    la == "Vale of Glamorgan" ~ african+vale_multipler_boys,
+    TRUE ~ as.numeric(african))) %>%
+  mutate(white_brit_girls = case_when(
+    la == "Vale of Glamorgan" ~ white_brit+vale_multiplier_girls ,
+    TRUE ~ as.numeric(white_brit))) %>%
+  mutate(traveller_girls = case_when(
+    la == "Vale of Glamorgan" ~ traveller+vale_multiplier_girls ,
+    TRUE ~ as.numeric(traveller))) %>%
+  mutate(african_girls = case_when(
+    la == "Vale of Glamorgan" ~ african+vale_multiplier_girls ,
+    TRUE ~ as.numeric(african))) %>%
+  select(-c("white_brit", "traveller", "african", 
+            "vale_multiplier_girls", 
+            "vale_multipler_boys",
+            "fp_indic", "sex")) %>%
+  distinct() %>%
+  pivot_longer(cols = -c("la"),
+               names_to = "group", 
+               values_to = "fp_indic")
+
+school_read_df <- school_read_df %>%
+  mutate(group = case_when(
+    group == "boys_fsm" ~ "Boys on FSM",
+    group == "girls_fsm" ~ "Girls on FSM",
+    group == "white_brit_boys" ~ "White British boys",
+    group == "white_brit_girls" ~ "White British girls",
+    group == "traveller_boys" ~ "Boys of Traveller heritage",
+    group == "african_boys" ~ "Boys of Black heritage",
+    group == "white_brit_girls" ~ "White British boys",
+    group == "traveller_girls" ~ "Girls of Traveller heritage",
+    group == "african_girls" ~ "Girls of Black heritage",
+    TRUE ~ as.character(group)
+  ))
+
+school_read_df %>%
+  ggplot(aes(x=reorder(group, fp_indic), y=fp_indic, fill=group)) + 
+  geom_bar(stat = "identity", width = 0.2) + 
+  coord_flip() + 
+  ylim(0,100) + 
+  facet_wrap(~la) + 
+  scale_fill_viridis_d() + 
+  labs(x=NULL, y="\nPercentage (%)",
+       title = NULL, caption = " Stats Wales, 2024 and modelled figures.") + 
+  theme(strip.text = element_text(size = 30)) +
+  guides(fill = F)
+
+```
+
+## Childcare supply in the Vale appears greater than that available in Cardiff
+
+::: notes
+
+```{r childcare_supply_notes, echo = FALSE, warning = FALSE, message = FALSE}
+knitr::opts_chunk$set(echo = FALSE, fig.width=30,fig.height=10)
+
+childcare <- read_xlsx("childcare_supply_2024.xlsx") %>%
+  mutate(LA = case_when(
+    LA == "VOG" ~ "Vale of Glamorgan",
+    TRUE ~ as.character(LA))) %>%
+  rename(la=1, type=2, no_settings=3, 
+         no_places=4, places_pc=5)
+         
+
+#population in Cardiff of 0-12 is
+
+#19099+4028+4143+4458+4296+4370+4387+4635
+
+#49416
+
+#population in VOG of 0-12 is
+
+#6522+18297-(1758+1721+1715+1733+1784)
+
+#16108
+
+childcare <- childcare %>%
+  mutate(places_pp = case_when(
+    la == "Cardiff" ~ no_places*1000/49416,
+    la == "Vale of Glamorgan" ~ no_places*1000/16108))
+  
+paste0("Childcare place provision in Cardiff in 2023-24 was ", round(childcare %>% filter(la == "Cardiff" & type == "All") %>% select(places_pp), 2), " per 1000 children. Provision in the Vale of Glamorgan in 2023-24 was ", round(childcare %>% filter(la == "Vale of Glamorgan" & type == "All") %>% select(places_pp), 2), " per 1000 children.")
+
+```
+
+:::
+
+```{r childcare_supply, echo = FALSE, warning = FALSE, message = FALSE}
+knitr::opts_chunk$set(echo = FALSE, fig.width=30,fig.height=10)
+
+childcare <- read_xlsx("childcare_supply_2024.xlsx") %>%
+  mutate(LA = case_when(
+    LA == "VOG" ~ "Vale of Glamorgan",
+    TRUE ~ as.character(LA))) %>%
+  rename(la=1, type=2, no_settings=3, 
+         no_places=4, places_pc=5)
+         
+
+#population in Cardiff of 0-12 is
+
+#19099+4028+4143+4458+4296+4370+4387+4635
+
+#49416
+
+#population in VOG of 0-12 is
+
+#6522+18297-(1758+1721+1715+1733+1784)
+
+#16108
+
+childcare %>%
+  mutate(places_pp = case_when(
+    la == "Cardiff" ~ no_places*1000/49416,
+    la == "Vale of Glamorgan" ~ no_places*1000/16108)) %>%  
+  filter(type == "All") %>%
+  ggplot(aes(x=la, y=places_pp, fill=la)) + 
+  geom_bar(stat = "identity", width = 0.2) + 
+  coord_flip() + 
+  scale_fill_manual(values = c("#eb008b", "#3a90ce")) + 
+  labs(x=NULL, y="\nPlaces per 1000 children (0-12 years)", caption = " Care Inspectorate Wales, 2024.") +
+    guides(fill = guide_legend(title = NULL))
+
+  
+```
+
+## A&E attendances for children aged 0-4 years in 2023-24 by WIMD quintile in Cardiff and Vale
+
+::: notes
+
+```{r ed_data_notes, echo = FALSE, warning = FALSE, message = FALSE}
+knitr::opts_chunk$set(echo = FALSE, fig.width=30,fig.height=10)
+
+wimd_lsoa <- read.csv("wimd2019_overall_v2.csv")
+
+lhb_ed <- read_xlsx("lhb_data.xlsx",
+                    sheet = 1,
+                    skip = 9) %>%
+  rename(no_visits=1, age=2, site=3, date_time=4, 
+         ref_source=5, outcome=6, lsoa_code=7, lsoa_rank=8) %>%
+  mutate(date_time = date(date_time))
+
+lhb_admissions <- read_xlsx("lhb_data.xlsx",
+                            sheet = 2,
+                            skip = 10) %>%
+  rename(no_admissions=1, age=2, site=3, date_time=4, 
+         ref_source=5, disc_method=6, 
+         injuries=7, resp=8,
+         lsoa_code=9, lsoa_rank=10) %>%
+  select(no_admissions, date_time, injuries, resp, lsoa_code) %>%
+  mutate(date_time = date(date_time)) %>%
+  pivot_longer(cols = -c("date_time", "lsoa_code", "no_admissions"),
+               names_to = "cause", 
+               values_to = "binary")
+
+df <- left_join(lhb_ed, wimd_lsoa, by = "lsoa_code") %>%
+  mutate(quintile = as.factor(quintile),
+         week = week(date_time),
+         month = month(date_time),
+         quarter = quarter(date_time)) %>%
+  group_by(month, quintile) %>%
+  summarise(no_visits = sum(no_visits)) %>%
+  mutate(rate = no_visits*10000/(6522+19099)) %>%
+  mutate(se = sqrt(no_visits)*10000/(6522+19099),
+         lci=rate-(1.96*se),
+         uci=rate+(1.96*se)) %>%
+  filter(quintile %in% c(1,5))
+
+paste0("Presentations to the Emergency Department in Cardif & Vale for children living in the most deprived areas in the latest month of 2023-24 were ", round(df %>% ungroup %>% filter(quintile == 1 & month == 12) %>% select(rate), 2), " per 10,000 children (95% CI ", round(df %>% ungroup %>% filter(quintile == 1 & month == 12) %>% select(lci), 2), "-", round(df %>% ungroup %>% filter(quintile == 1 & month == 12) %>% select(uci), 2), "). The rate of presentation for children in the least deprived areas were ", round(df %>% ungroup %>% filter(quintile == 5 & month == 12) %>% select(rate), 2), " per 10,000 children (95% CI ", round(df %>% ungroup %>% filter(quintile == 5 & month == 12) %>% select(lci), 2), "-", round(df %>% ungroup %>% filter(quintile == 5 & month == 12) %>% select(uci), 2),").")
+
+```
+
+:::
+
+```{r ed_data, echo = FALSE, warning = FALSE, message = FALSE}
+knitr::opts_chunk$set(echo = FALSE, fig.width=30,fig.height=10)
+
+wimd_lsoa <- read.csv("wimd2019_overall_v2.csv")
+
+lhb_ed <- read_xlsx("lhb_data.xlsx",
+                    sheet = 1,
+                    skip = 9) %>%
+  rename(no_visits=1, age=2, site=3, date_time=4, 
+         ref_source=5, outcome=6, lsoa_code=7, lsoa_rank=8) %>%
+  mutate(date_time = date(date_time))
+
+lhb_admissions <- read_xlsx("lhb_data.xlsx",
+                            sheet = 2,
+                            skip = 10) %>%
+  rename(no_admissions=1, age=2, site=3, date_time=4, 
+         ref_source=5, disc_method=6, 
+         injuries=7, resp=8,
+         lsoa_code=9, lsoa_rank=10) %>%
+  select(no_admissions, date_time, injuries, resp, lsoa_code) %>%
+  mutate(date_time = date(date_time)) %>%
+  pivot_longer(cols = -c("date_time", "lsoa_code", "no_admissions"),
+               names_to = "cause", 
+               values_to = "binary")
+
+left_join(lhb_ed, wimd_lsoa, by = "lsoa_code") %>%
+  mutate(quintile = as.factor(quintile),
+         week = week(date_time),
+         month = month(date_time),
+         quarter = quarter(date_time)) %>%
+  group_by(month, quintile) %>%
+  summarise(no_visits = sum(no_visits)) %>%
+  mutate(rate = no_visits*10000/(6522+19099)) %>%
+  mutate(se = sqrt(no_visits)*10000/(6522+19099),
+         lci=rate-(1.96*se),
+         uci=rate+(1.96*se)) %>%
+  filter(quintile %in% c(1,5)) %>%
+  ggplot(aes(x=month, y=rate, colour=quintile)) + 
+  geom_line(size = 2) + 
+  geom_errorbar(aes(ymin=lci, ymax=uci), width = 0.1) + 
+  scale_colour_manual(values = c("#3a8fcf", "#f38120"),
+                      labels = c("Most deprived", "Least deprived")) + 
+  labs(x="Month", y="Attendances/10000", caption = " Cardiff & Vale University Health Board, 2024.") + 
+  guides(colour = guide_legend(title = NULL)) + 
+  scale_x_continuous(breaks = c(2,4,6,8,10,12), 
+                     labels = c("Feb", "Apr", "Jun", "Aug", "Oct", "Dec"))
+```
+
+## Children in more deprived areas in Cardiff and Vale have lower access to recreational green space
+
+::: notes
+
+```{r greenspace_notes, echo = FALSE, warning = FALSE, message = FALSE}
+knitr::opts_chunk$set(echo = FALSE, fig.width=30,fig.height=10)
+
+df <- read_xlsx("LSOA_GSI24_children_IMD.xlsx",
+                sheet = 1) %>%
+  clean_names() %>%
+  select(1, 6, 9, 10, 11, 12, 
+         13, 14, 15, 16, 
+         welsh_imd_2019_quintile)
+
+df_1 <- df %>%
+  group_by(lad22nm, welsh_imd_2019_quintile) %>%
+  drop_na() %>%
+  summarise(across(where(is.numeric), ~sum(.x, na.rm=T))) %>%
+  select(lad22nm, welsh_imd_2019_quintile, total_provision_ha, 
+         children_age_up_to_4) %>%
+  mutate(total_provision_sqm = total_provision_ha*10000,
+         total_provision_sqm_pp = total_provision_sqm/children_age_up_to_4) %>%
+  select(lad22nm, welsh_imd_2019_quintile,
+         total_provision_sqm_pp, children_age_up_to_4) #%>%
+  #mutate(se = sqrt(total_provision_sqm)
+         #,
+   #      lci = total_provision_sqm_pp-(1.96*se),
+    #     uci = total_provision_sqm_pp+(1.96*se)) %>%
+  #select(lad22nm, welsh_imd_2019_quintile, total_provision_sqm_pp, lci, uci)
+
+paste0("Children living in Cardiff in the least deprived areas have access to ", round(df_1 %>% ungroup %>% filter(lad22nm == "Cardiff" & welsh_imd_2019_quintile == 5) %>% select(total_provision_sqm_pp), 2), " square metres of recreational greenspace per person, compared with ", round(df_1 %>% ungroup %>% filter(lad22nm == "Cardiff" & welsh_imd_2019_quintile == 1) %>% select(total_provision_sqm_pp), 2), " square metres per person in the most deprived areas. Children living in the Vale of Glamorgan in the least deprived areas have access to ", round(df_1 %>% ungroup %>% filter(lad22nm == "Vale of Glamorgan" & welsh_imd_2019_quintile == 5) %>% select(total_provision_sqm_pp), 2), " square metres of recreational greenspace per person, compared with ", round(df_1 %>% ungroup %>% filter(lad22nm == "Vale of Glamorgan" & welsh_imd_2019_quintile == 1) %>% select(total_provision_sqm_pp), 2), " square metres per person in the most deprived areas.")
+
+```
+
+:::
+
+```{r greenspace, echo = FALSE, warning = FALSE, message = FALSE}
+knitr::opts_chunk$set(echo = FALSE, fig.width=30,fig.height=10)
+
+df <- read_xlsx("LSOA_GSI24_children_IMD.xlsx",
+                sheet = 1) %>%
+  clean_names() %>%
+  select(1, 6, 9, 10, 11, 12, 
+         13, 14, 15, 16, 
+         welsh_imd_2019_quintile)
+
+df_1 <- df %>%
+  group_by(lad22nm, welsh_imd_2019_quintile) %>%
+  drop_na() %>%
+  summarise(across(where(is.numeric), ~sum(.x, na.rm=T))) %>%
+  select(lad22nm, welsh_imd_2019_quintile, total_provision_ha, 
+         children_age_up_to_4) %>%
+  mutate(total_provision_sqm = total_provision_ha*10000,
+         total_provision_sqm_pp = total_provision_sqm/children_age_up_to_4) %>%
+  select(lad22nm, welsh_imd_2019_quintile,
+         total_provision_sqm_pp, children_age_up_to_4) #%>%
+  #mutate(se = sqrt(total_provision_sqm)
+         #,
+   #      lci = total_provision_sqm_pp-(1.96*se),
+    #     uci = total_provision_sqm_pp+(1.96*se)) %>%
+  #select(lad22nm, welsh_imd_2019_quintile, total_provision_sqm_pp, lci, uci)
+
+#Visualise
+
+df_1 %>%
+  filter(welsh_imd_2019_quintile %in% c(1,5)) %>%
+  select(-children_age_up_to_4) %>%
+  pivot_wider(names_from = welsh_imd_2019_quintile, 
+              values_from = total_provision_sqm_pp) %>%
+  #mutate(la = fct_relevel(lad22nm, c("Cardiff", "Vale of #Glamorgan"))) %>%
+  ggplot() + 
+  geom_linerange(aes(x=lad22nm, ymin=`1`,
+                     ymax=`5`),
+                 colour = "black") +
+  geom_point(aes(x=lad22nm, y=`1`, colour="colour1"), 
+             size = 20) + 
+  geom_point(aes(x=lad22nm, y=`5`, colour="colour2"), 
+             size = 20) + 
+  coord_flip() + 
+  ylim(0,2000) + 
+  labs(x=NULL, y="\nGreenspace per sqm per child 0-4 years", caption = " Fields in Trust, 2024.") +
+  scale_colour_manual(name = NULL,
+                      values=c(colour1="#3a8fcf", colour2="#f38120"),
+                      labels = c("Most deprived", "Least deprived"))
+
+```
+
+## Uptake of Statutory Paternity Leave in Wales in 2021 was higher than England, but lower than Scotland, with only around 1 in 3 using the entitlement
+
+::: notes
+
+```{r paternity_leave_notes, echo = FALSE, warning = FALSE, message = FALSE}
+knitr::opts_chunk$set(echo = FALSE, fig.width=30,fig.height=10)
+
+pat <- tibble(
+  region = c("Wales", "Scotland", "England"),
+  births = c(28879, 47786, 577046), 
+  spl_claims = c(8900, 15800, sum(14900+18,500+27400+7,000+22200+	6700+26700+16300+17500+16,600)
+)) %>%
+  mutate(perc_spl = spl_claims/births)
+
+paste0(round(pat %>% filter(region == "Wales") %>% select(perc_spl)*100, 2), "% of fathers in Wales used their 2 week Statutory Paternity Leave entitlement in 2021, compared with ", round(pat %>% filter(region == "Scotland") %>% select(perc_spl)*100, 2), "% of fathers in Scotland, and ", round(pat %>% filter(region == "England") %>% select(perc_spl)*100, 2), "% of fathers in England.")
+
+```
+
+
+:::
+
+```{r paternity_leave, echo = FALSE, warning = FALSE, message = FALSE}
+knitr::opts_chunk$set(echo = FALSE, fig.width=30,fig.height=10)
+
+tibble(
+  region = c("Wales", "Scotland", "England"),
+  births = c(28879, 47786, 577046), 
+  spl_claims = c(8900, 15800, sum(14900+18,500+27400+7,000+22200+	6700+26700+16300+17500+16,600)
+)) %>%
+  mutate(perc_spl = spl_claims/births) %>%
+  ggplot(aes(x=region, y=perc_spl, fill=region)) + 
+  geom_bar(stat = "identity", width = 0.2) + 
+  coord_flip() + 
+  scale_fill_viridis_d() +
+  labs(x=NULL, y="\nPercentage (%)",
+       title = NULL, caption = " Department of Work and Pensions, 2024.") + 
+  guides(fill = guide_legend(title = NULL)) + 
+  ylim(0,0.5) + 
+    scale_y_continuous(labels = scales::percent)
+
+```
