@@ -1453,95 +1453,96 @@ childcare %>%
 ::: notes
 
 ```{r ed_data_notes, echo = FALSE, warning = FALSE, message = FALSE}
-knitr::opts_chunk$set(echo = FALSE, fig.width=30,fig.height=10)
+#knitr::opts_chunk$set(echo = FALSE, fig.width=30,fig.height=10)
 
-wimd_lsoa <- read.csv("wimd2019_overall_v2.csv")
+#wimd_lsoa <- read.csv("wimd2019_overall_v2.csv")
 
-lhb_ed <- read_xlsx("lhb_data.xlsx",
-                    sheet = 1,
-                    skip = 9) %>%
-  rename(no_visits=1, age=2, site=3, date_time=4, 
-         ref_source=5, outcome=6, lsoa_code=7, lsoa_rank=8) %>%
-  mutate(date_time = date(date_time))
+#lhb_ed <- read_xlsx("lhb_data.xlsx",
+ #                   sheet = 1,
+  #                  skip = 9) %>%
+  #rename(no_visits=1, age=2, site=3, date_time=4, 
+   #      ref_source=5, outcome=6, lsoa_code=7, lsoa_rank=8) %>%
+  
+#mutate(date_time = date(date_time))
 
-lhb_admissions <- read_xlsx("lhb_data.xlsx",
-                            sheet = 2,
-                            skip = 10) %>%
-  rename(no_admissions=1, age=2, site=3, date_time=4, 
-         ref_source=5, disc_method=6, 
-         injuries=7, resp=8,
-         lsoa_code=9, lsoa_rank=10) %>%
-  select(no_admissions, date_time, injuries, resp, lsoa_code) %>%
-  mutate(date_time = date(date_time)) %>%
-  pivot_longer(cols = -c("date_time", "lsoa_code", "no_admissions"),
-               names_to = "cause", 
-               values_to = "binary")
+#lhb_admissions <- read_xlsx("lhb_data.xlsx",
+ #                           sheet = 2,
+  #                          skip = 10) %>%
+  #rename(no_admissions=1, age=2, site=3, date_time=4, 
+  #       ref_source=5, disc_method=6, 
+   #      injuries=7, resp=8,
+    #     lsoa_code=9, lsoa_rank=10) %>%
+  #select(no_admissions, date_time, injuries, resp, lsoa_code) #%>%
+ # mutate(date_time = date(date_time)) %>%
+  #pivot_longer(cols = -c("date_time", "lsoa_code", #"no_admissions"),
+ #              names_to = "cause", 
+  #             values_to = "binary")
 
-df <- left_join(lhb_ed, wimd_lsoa, by = "lsoa_code") %>%
-  mutate(quintile = as.factor(quintile),
-         week = week(date_time),
-         month = month(date_time),
-         quarter = quarter(date_time)) %>%
-  group_by(month, quintile) %>%
-  summarise(no_visits = sum(no_visits)) %>%
-  mutate(rate = no_visits*10000/(6522+19099)) %>%
-  mutate(se = sqrt(no_visits)*10000/(6522+19099),
-         lci=rate-(1.96*se),
-         uci=rate+(1.96*se)) %>%
-  filter(quintile %in% c(1,5))
+#df <- left_join(lhb_ed, wimd_lsoa, by = "lsoa_code") %>%
+ # mutate(quintile = as.factor(quintile),
+ #        week = week(date_time),
+  #       month = month(date_time),
+   #      quarter = quarter(date_time)) %>%
+  #group_by(month, quintile) %>%
+  #summarise(no_visits = sum(no_visits)) %>%
+  #mutate(rate = no_visits*10000/(6522+19099)) %>%
+  #mutate(se = sqrt(no_visits)*10000/(6522+19099),
+   #      lci=rate-(1.96*se),
+    #     uci=rate+(1.96*se)) %>%
+  #filter(quintile %in% c(1,5))
 
-paste0("Presentations to the Emergency Department in Cardif & Vale for children living in the most deprived areas in the latest month of 2023-24 were ", round(df %>% ungroup %>% filter(quintile == 1 & month == 12) %>% select(rate), 2), " per 10,000 children (95% CI ", round(df %>% ungroup %>% filter(quintile == 1 & month == 12) %>% select(lci), 2), "-", round(df %>% ungroup %>% filter(quintile == 1 & month == 12) %>% select(uci), 2), "). The rate of presentation for children in the least deprived areas were ", round(df %>% ungroup %>% filter(quintile == 5 & month == 12) %>% select(rate), 2), " per 10,000 children (95% CI ", round(df %>% ungroup %>% filter(quintile == 5 & month == 12) %>% select(lci), 2), "-", round(df %>% ungroup %>% filter(quintile == 5 & month == 12) %>% select(uci), 2),").")
+#paste0("Presentations to the Emergency Department in Cardif & #Vale for children living in the most deprived areas in the #latest month of 2023-24 were ", round(df %>% ungroup %>% #filter(quintile == 1 & month == 12) %>% select(rate), 2), " per #10,000 children (95% CI ", round(df %>% ungroup %>% #filter(quintile == 1 & month == 12) %>% select(lci), 2), "-", #round(df %>% ungroup %>% filter(quintile == 1 & month == 12) #%>% select(uci), 2), "). The rate of presentation for children #in the least deprived areas were ", round(df %>% ungroup %>% #filter(quintile == 5 & month == 12) %>% select(rate), 2), " per #10,000 children (95% CI ", round(df %>% ungroup %>% #filter(quintile == 5 & month == 12) %>% select(lci), 2), "-", #round(df %>% ungroup %>% filter(quintile == 5 & month == 12) #%>% select(uci), 2),").")
 
 ```
 
 :::
 
 ```{r ed_data, echo = FALSE, warning = FALSE, message = FALSE}
-knitr::opts_chunk$set(echo = FALSE, fig.width=30,fig.height=10)
+#knitr::opts_chunk$set(echo = FALSE, fig.width=30,fig.height=10)
 
-wimd_lsoa <- read.csv("wimd2019_overall_v2.csv")
+#wimd_lsoa <- read.csv("wimd2019_overall_v2.csv")
 
-lhb_ed <- read_xlsx("lhb_data.xlsx",
-                    sheet = 1,
-                    skip = 9) %>%
-  rename(no_visits=1, age=2, site=3, date_time=4, 
-         ref_source=5, outcome=6, lsoa_code=7, lsoa_rank=8) %>%
-  mutate(date_time = date(date_time))
+#lhb_ed <- read_xlsx("lhb_data.xlsx",
+ #                   sheet = 1,
+  #                  skip = 9) %>%
+  #rename(no_visits=1, age=2, site=3, date_time=4, 
+   #      ref_source=5, outcome=6, lsoa_code=7, lsoa_rank=8) %>%
+  #mutate(date_time = date(date_time))
 
-lhb_admissions <- read_xlsx("lhb_data.xlsx",
-                            sheet = 2,
-                            skip = 10) %>%
-  rename(no_admissions=1, age=2, site=3, date_time=4, 
-         ref_source=5, disc_method=6, 
-         injuries=7, resp=8,
-         lsoa_code=9, lsoa_rank=10) %>%
-  select(no_admissions, date_time, injuries, resp, lsoa_code) %>%
-  mutate(date_time = date(date_time)) %>%
-  pivot_longer(cols = -c("date_time", "lsoa_code", "no_admissions"),
-               names_to = "cause", 
-               values_to = "binary")
+#lhb_admissions <- read_xlsx("lhb_data.xlsx",
+#                            sheet = 2,
+ #                           skip = 10) %>%
+  #rename(no_admissions=1, age=2, site=3, date_time=4, 
+   #      ref_source=5, disc_method=6, 
+    #     injuries=7, resp=8,
+    #     lsoa_code=9, lsoa_rank=10) %>%
+  #select(no_admissions, date_time, injuries, resp, lsoa_code) %>%
+#  mutate(date_time = date(date_time)) %>%
+#  pivot_longer(cols = -c("date_time", "lsoa_code", #"no_admissions"),
+ #              names_to = "cause", 
+  #             values_to = "binary")
 
-left_join(lhb_ed, wimd_lsoa, by = "lsoa_code") %>%
-  mutate(quintile = as.factor(quintile),
-         week = week(date_time),
-         month = month(date_time),
-         quarter = quarter(date_time)) %>%
-  group_by(month, quintile) %>%
-  summarise(no_visits = sum(no_visits)) %>%
-  mutate(rate = no_visits*10000/(6522+19099)) %>%
-  mutate(se = sqrt(no_visits)*10000/(6522+19099),
-         lci=rate-(1.96*se),
-         uci=rate+(1.96*se)) %>%
-  filter(quintile %in% c(1,5)) %>%
-  ggplot(aes(x=month, y=rate, colour=quintile)) + 
-  geom_line(size = 2) + 
-  geom_errorbar(aes(ymin=lci, ymax=uci), width = 0.1) + 
-  scale_colour_manual(values = c("#3a8fcf", "#f38120"),
-                      labels = c("Most deprived", "Least deprived")) + 
-  labs(x="Month", y="Attendances/10000", caption = " Cardiff & Vale University Health Board, 2024.") + 
-  guides(colour = guide_legend(title = NULL)) + 
-  scale_x_continuous(breaks = c(2,4,6,8,10,12), 
-                     labels = c("Feb", "Apr", "Jun", "Aug", "Oct", "Dec"))
+#left_join(lhb_ed, wimd_lsoa, by = "lsoa_code") %>%
+ # mutate(quintile = as.factor(quintile),
+  #       week = week(date_time),
+   #      month = month(date_time),
+    #     quarter = quarter(date_time)) %>%
+  #group_by(month, quintile) %>%
+  #summarise(no_visits = sum(no_visits)) %>%
+  #mutate(rate = no_visits*10000/(6522+19099)) %>%
+  #mutate(se = sqrt(no_visits)*10000/(6522+19099),
+  #       lci=rate-(1.96*se),
+  #       uci=rate+(1.96*se)) %>%
+  #filter(quintile %in% c(1,5)) %>%
+  #ggplot(aes(x=month, y=rate, colour=quintile)) + 
+  #geom_line(size = 2) + 
+  #geom_errorbar(aes(ymin=lci, ymax=uci), width = 0.1) + 
+  #scale_colour_manual(values = c("#3a8fcf", "#f38120"),
+  #                    labels = c("Most deprived", "Least #deprived")) + 
+#  labs(x="Month", y="Attendances/10000", caption = " Cardiff & #Vale University Health Board, 2024.") + 
+ # guides(colour = guide_legend(title = NULL)) + 
+  #scale_x_continuous(breaks = c(2,4,6,8,10,12), 
+  #                   labels = c("Feb", "Apr", "Jun", "Aug", #"Oct", "Dec"))
 ```
 
 ## Children in more deprived areas in Cardiff and Vale have lower access to recreational green space
